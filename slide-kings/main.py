@@ -21,11 +21,90 @@ from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, CardMaker, DirectionalLight,
-    GeomNode, LineSegs, NodePath,
+    GeomNode, GeomVertexFormat, GeomVertexData, GeomVertexWriter,
+    GeomTriangles, Geom, LineSegs, NodePath,
     TextNode, TransparencyAttrib, WindowProperties,
 )
 
-from geometry import make_box, make_cylinder, make_sphere
+# ══════════════════════════════════════════════════════════════════════════════
+# GEOMETRY HELPERS (inlined — no separate geometry.py needed)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _new_vdata(name, num_rows):
+    fmt = GeomVertexFormat.get_v3n3c4()
+    vdata = GeomVertexData(name, fmt, Geom.UH_static)
+    vdata.setNumRows(num_rows)
+    return (vdata,
+            GeomVertexWriter(vdata, "vertex"),
+            GeomVertexWriter(vdata, "normal"),
+            GeomVertexWriter(vdata, "color"))
+
+def _geom_node(name, vdata, tris):
+    geom = Geom(vdata); geom.addPrimitive(tris)
+    node = GeomNode(name); node.addGeom(geom)
+    return node
+
+def make_box(w, d, h, color=(1,1,1,1)):
+    r,g,b,a = color
+    hw,hd,hh = w/2,d/2,h/2
+    vdata,vw,nw,cw = _new_vdata("box", 24)
+    tris = GeomTriangles(Geom.UH_static)
+    faces = [
+        ([(-hw,-hd,-hh),(hw,-hd,-hh),(hw,hd,-hh),(-hw,hd,-hh)],(0,0,-1)),
+        ([(-hw,-hd,hh),(-hw,hd,hh),(hw,hd,hh),(hw,-hd,hh)],(0,0,1)),
+        ([(-hw,-hd,-hh),(-hw,-hd,hh),(hw,-hd,hh),(hw,-hd,-hh)],(0,-1,0)),
+        ([(hw,hd,-hh),(hw,hd,hh),(-hw,hd,hh),(-hw,hd,-hh)],(0,1,0)),
+        ([(-hw,hd,-hh),(-hw,hd,hh),(-hw,-hd,hh),(-hw,-hd,-hh)],(-1,0,0)),
+        ([(hw,-hd,-hh),(hw,-hd,hh),(hw,hd,hh),(hw,hd,-hh)],(1,0,0)),
+    ]
+    for i,(verts,norm) in enumerate(faces):
+        for v in verts: vw.addData3(*v); nw.addData3(*norm); cw.addData4(r,g,b,a)
+        b0=i*4; tris.addVertices(b0,b0+1,b0+2); tris.addVertices(b0,b0+2,b0+3)
+    return _geom_node("box", vdata, tris)
+
+def make_sphere(radius=1.0, color=(1,1,1,1), lat_segs=9, lon_segs=16):
+    r,g,b,a = color
+    vdata,vw,nw,cw = _new_vdata("sphere", lat_segs*lon_segs*4)
+    tris = GeomTriangles(Geom.UH_static)
+    idx = 0
+    for lat in range(lat_segs):
+        phi0=math.pi*(-0.5+lat/lat_segs); phi1=math.pi*(-0.5+(lat+1)/lat_segs)
+        z0,z1=math.sin(phi0)*radius,math.sin(phi1)*radius
+        cr0,cr1=math.cos(phi0)*radius,math.cos(phi1)*radius
+        cn0,cn1=math.cos(phi0),math.cos(phi1)
+        for lon in range(lon_segs):
+            th0=2*math.pi*lon/lon_segs; th1=2*math.pi*(lon+1)/lon_segs
+            c0,s0=math.cos(th0),math.sin(th0); c1,s1=math.cos(th1),math.sin(th1)
+            qv=[(cr0*c0,cr0*s0,z0),(cr1*c0,cr1*s0,z1),(cr1*c1,cr1*s1,z1),(cr0*c1,cr0*s1,z0)]
+            qn=[(cn0*c0,cn0*s0,math.sin(phi0)),(cn1*c0,cn1*s0,math.sin(phi1)),
+                (cn1*c1,cn1*s1,math.sin(phi1)),(cn0*c1,cn0*s1,math.sin(phi0))]
+            for v,n in zip(qv,qn): vw.addData3(*v); nw.addData3(*n); cw.addData4(r,g,b,a)
+            tris.addVertices(idx,idx+1,idx+2); tris.addVertices(idx,idx+2,idx+3); idx+=4
+    return _geom_node("sphere", vdata, tris)
+
+def make_cylinder(radius, height, color=(1,1,1,1), segs=12):
+    r,g,b,a = color
+    hh=height/2
+    vdata,vw,nw,cw = _new_vdata("cyl", segs*4+segs*3*2)
+    tris = GeomTriangles(Geom.UH_static)
+    idx=[0]
+    def av(x,y,z,nx,ny,nz):
+        vw.addData3(x,y,z); nw.addData3(nx,ny,nz); cw.addData4(r,g,b,a)
+        i=idx[0]; idx[0]+=1; return i
+    for i in range(segs):
+        th0=2*math.pi*i/segs; th1=2*math.pi*(i+1)/segs
+        c0,s0=math.cos(th0),math.sin(th0); c1,s1=math.cos(th1),math.sin(th1)
+        i0=av(c0*radius,s0*radius,-hh,c0,s0,0); i1=av(c0*radius,s0*radius,hh,c0,s0,0)
+        i2=av(c1*radius,s1*radius,hh,c1,s1,0);  i3=av(c1*radius,s1*radius,-hh,c1,s1,0)
+        tris.addVertices(i0,i1,i2); tris.addVertices(i0,i2,i3)
+    for cap_z,nz in [(hh,1),(-hh,-1)]:
+        cx=av(0,0,cap_z,0,0,nz); prev=av(radius,0,cap_z,0,0,nz)
+        for i in range(1,segs+1):
+            th=2*math.pi*i/segs
+            curr=av(math.cos(th)*radius,math.sin(th)*radius,cap_z,0,0,nz)
+            tris.addVertices(cx,prev,curr) if nz>0 else tris.addVertices(cx,curr,prev)
+            prev=curr
+    return _geom_node("cylinder", vdata, tris)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS
