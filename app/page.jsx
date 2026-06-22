@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import Link from "next/link";
 
 // ── TOKENS ────────────────────────────────────────────────────────────────────
 const T = {
@@ -655,6 +656,18 @@ export default function App() {
             </div>
           </Card>
         )}
+
+        {/* Game Banner */}
+        <Link href="/game" style={{textDecoration:"none",display:"block",marginBottom:20}}>
+          <div style={{borderRadius:16,background:"linear-gradient(135deg,#f25c7a22,#9b7ff422)",border:"1.5px solid #f25c7a55",padding:"16px 20px",display:"flex",alignItems:"center",gap:16,cursor:"pointer",transition:"all 0.2s"}}>
+            <div style={{fontSize:36}}>⚽</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:800,color:"#f25c7a",fontSize:16,letterSpacing:"0.04em"}}>NEW: SLIDE KINGS</div>
+              <div style={{color:"#7a86a8",fontSize:13,marginTop:2}}>Anime 3D football chaos — slide tackle everything. Play now!</div>
+            </div>
+            <div style={{color:"#f25c7a",fontSize:20}}>→</div>
+          </div>
+        </Link>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:32}}>
           {[{i:"✨",t:"AI Stories",d:"Personalised every night"},{i:"⚡",t:"Story Starter",d:"Child leads the way"},{i:"📖",t:"Series",d:"Ongoing adventures"},{i:"🏆",t:"Badges",d:"Earn as you create"},{i:"🎙️",t:"Narration",d:"Reads aloud to kids"},{i:"📄",t:"PDF Export",d:"Printable keepsakes"}].map(f=>(
